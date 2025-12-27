@@ -420,6 +420,10 @@ export default function App() {
   return (
     <div className="app">
       <style>{`
+      *{
+        margin: 0;
+        padding: 0;
+      }
         .app {
           background: #0d1117;
           color: #c9d1d9;
