@@ -29,43 +29,73 @@ const LANGUAGE_EXTENSIONS = {
 
 // API utility functions
 async function fetchLeetCodeDaily() {
-  const query = `
-    query questionOfToday {
-      activeDailyCodingChallengeQuestion {
-        date
-        link
-        question {
-          questionId
-          questionFrontendId
-          title
-          titleSlug
-          difficulty
-          content
-          topicTags {
-            name
-          }
-          codeSnippets {
-            lang
-            code
-          }
-          exampleTestcases
-          hints
-        }
-      }
+  // Using LeetCode's public API endpoint that doesn't require authentication
+  // We'll fetch the daily challenge through their public GraphQL endpoint
+  
+  try {
+    // First, get the daily challenge slug from the homepage
+    const homeResponse = await fetch("https://leetcode.com/");
+    const homeHtml = await homeResponse.text();
+    
+    // Extract the daily challenge data from the page
+    // LeetCode embeds the daily challenge in a script tag
+    const match = homeHtml.match(/activeDailyCodingChallengeQuestion.*?titleSlug":"([^"]+)"/);
+    
+    if (!match) {
+      throw new Error("Could not find daily challenge");
     }
-  `;
-
-  const response = await fetch("https://leetcode.com/graphql", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "User-Agent": "Mozilla/5.0"
-    },
-    body: JSON.stringify({ query })
-  });
-
-  const data = await response.json();
-  return data.data.activeDailyCodingChallengeQuestion;
+    
+    const titleSlug = match[1];
+    
+    // Now fetch the problem details using the alpha API
+    const problemResponse = await fetch(`https://alfa-leetcode-api.onrender.com/select?titleSlug=${titleSlug}`);
+    const problemData = await problemResponse.json();
+    
+    // Transform to our expected format
+    return {
+      date: new Date().toISOString().split('T')[0],
+      link: `/problems/${titleSlug}/`,
+      question: {
+        questionId: problemData.questionId || "N/A",
+        questionFrontendId: problemData.questionFrontendId || problemData.questionId || "N/A",
+        title: problemData.questionTitle || problemData.title,
+        titleSlug: titleSlug,
+        difficulty: problemData.difficulty,
+        content: problemData.question || problemData.content || "",
+        topicTags: (problemData.topicTags || []).map(tag => ({ name: tag })),
+        codeSnippets: problemData.codeSnippets || [],
+        exampleTestcases: problemData.exampleTestCases || "",
+        hints: problemData.hints || []
+      }
+    };
+  } catch (error) {
+    // Fallback: Use a third-party API that provides LeetCode daily challenge
+    try {
+      const response = await fetch("https://alfa-leetcode-api.onrender.com/daily");
+      const data = await response.json();
+      
+      return {
+        date: data.date || new Date().toISOString().split('T')[0],
+        link: `/problems/${data.titleSlug || data.questionTitleSlug}/`,
+        question: {
+          questionId: data.questionId || "N/A",
+          questionFrontendId: data.questionFrontendId || data.questionId || "N/A",
+          title: data.questionTitle || data.title,
+          titleSlug: data.titleSlug || data.questionTitleSlug,
+          difficulty: data.difficulty,
+          content: data.question || data.content || "",
+          topicTags: (data.topicTags || []).map(tag => 
+            typeof tag === 'string' ? { name: tag } : tag
+          ),
+          codeSnippets: data.codeSnippets || [],
+          exampleTestcases: data.exampleTestCases || "",
+          hints: data.hints || []
+        }
+      };
+    } catch (fallbackError) {
+      throw new Error("Unable to fetch LeetCode daily challenge. Please try again later.");
+    }
+  }
 }
 
 async function fetchCodeforcesDaily() {
@@ -285,13 +315,17 @@ export default function App() {
       if (mode === MODES.LEETCODE) {
         log("📥 Fetching today's LeetCode problem...");
         const leetcodeData = await fetchLeetCodeDaily();
+        
         problemData = {
           title: leetcodeData.question.title,
           difficulty: leetcodeData.question.difficulty,
           description: cleanHtmlContent(leetcodeData.question.content),
-          tags: leetcodeData.question.topicTags.map(t => t.name).join(", "),
-          testCases: leetcodeData.question.exampleTestcases,
-          hints: leetcodeData.question.hints || []
+          tags: (leetcodeData.question.topicTags || []).map(t => 
+            typeof t === 'string' ? t : t.name
+          ).join(", "),
+          testCases: leetcodeData.question.exampleTestcases || "Check LeetCode for test cases",
+          hints: leetcodeData.question.hints || [],
+          link: `https://leetcode.com${leetcodeData.link}`
         };
         log(`✅ Loaded: ${problemData.title} (${problemData.difficulty})`);
       } else if (mode === MODES.CODEFORCE) {
