@@ -609,6 +609,9 @@ export default function App() {
 
       <h1>⚡ GitExpress</h1>
       <div className="subtitle">Multi-Mode AI Code Generator with GitHub Integration</div>
+      <div className="subtitle">Made with <pre>  ∧,,,∧
+(  ̳• · • ̳)
+/    づ♡</pre> by AI and AB </div>
 
       <section className="panel">
         <h2>🔐 Settings</h2>
